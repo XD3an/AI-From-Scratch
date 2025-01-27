@@ -107,7 +107,9 @@ def train_model(model, optimizer, train_data, val_data, batch_size, iterations, 
             logger.info(
                 f"[Iterations: {step:4d}] Train loss: {losses['train_loss']:8.4f} | Validation loss: {losses['val_loss']:8.4f}"
             )
-        
+            # checkpoint model
+            torch.save(model.state_dict(), f"./model/model_{step}.pt")
+
         # get a batch of data
         x_batch, y_batch = get_batch(train_data, context_length, batch_size, device)
 
