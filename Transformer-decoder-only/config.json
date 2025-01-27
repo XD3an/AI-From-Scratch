@@ -12,9 +12,9 @@
     },
     "train":{
         "batch_size": 4,
-        "epochs": 5,
+        "iterations": 20000,
         "learning_rate": 1e-3,
-        "eval_interval": 1000,
+        "eval_interval": 50,
         "context_length": 16,
         "dataset_path": "goendalf666/sales-textbook_for_convincing_and_selling",
         "model_path": "./model/model.pth",

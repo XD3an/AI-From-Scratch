@@ -36,7 +36,7 @@ class TrainingConfig:
             config = json.load(f)
         
         self.BATCH_SIZE = config['train']['batch_size']
-        self.EPOCHS = config['train']['epochs']
+        self.ITERATIONS = config['train']['iterations']
         self.LEARNING_RATE = config['train']['learning_rate']
         self.EVAL_INTERVAL = config['train']['eval_interval']
         self.CONTEXT_LENGTH = config['train']['context_length']
@@ -47,7 +47,7 @@ class TrainingConfig:
 
 
 @torch.no_grad()
-def estimate_loss(model, train_data, val_data, batch_size, context_length, device):
+def estimate_loss(model, train_data, val_data, batch_size, eval_interval, context_length, device):
     """
     Estimate model loss on training and validation sets
     
@@ -55,33 +55,31 @@ def estimate_loss(model, train_data, val_data, batch_size, context_length, devic
         model (Model): Trained model
         train_data (list): Training data
         val_data (list): Validation data
-        config (TrainingConfig): Training configuration
+        batch_size (int): Batch size
+        eval_interval (int): Interval for evaluation
+        context_length (int): Context length for training
+        device (str): Device to run the model on
     
     Returns:
         dict: Losses for training and validation sets
     """
     out = {}
-    
+    model.eval()
+
     # Estimate loss on training set
-    train_loss = 0
-    for i in range(0, len(train_data), batch_size):
-        x_batch, y_batch = get_batch(train_data, context_length, batch_size, device)
-        _, loss = model(x_batch, y_batch)
-        train_loss += loss.item()
-    out['train_loss'] = train_loss / len(train_data)
-    
-    # Estimate loss on validation set
-    val_loss = 0
-    for i in range(0, len(val_data), batch_size):
-        x_batch, y_batch = get_batch(val_data, context_length, batch_size, device)
-        _, loss = model(x_batch, y_batch)
-        val_loss += loss.item()
-    out['val_loss'] = val_loss / len(val_data)
-    
+    for split in ['train', 'val']:
+        losses = torch.zeros(eval_interval)
+        for k in range(eval_interval):
+            data = train_data if split == 'train' else val_data
+            x_batch, y_batch = get_batch(data, context_length, batch_size, device)
+            _, loss = model(x_batch, y_batch)
+            losses[k] = loss.item()
+        out[f"{split}_loss"] = losses.mean().item()
+
     model.train()
     return out
 
-def train_model(model, optimizer, train_data, val_data, batch_size, epochs, eval_interval, context_length, device, seed):
+def train_model(model, optimizer, train_data, val_data, batch_size, iterations, eval_interval, context_length, device, seed):
     """
     Train the model
     
@@ -90,38 +88,38 @@ def train_model(model, optimizer, train_data, val_data, batch_size, epochs, eval
         optimizer (torch.optim.Optimizer): Optimizer for training
         train_data (list): Training data
         val_data (list): Validation data
-        config (TrainingConfig): Training configuration
+        batch_size (int): Batch size
+        iterations (int): Number of training iterations
+        context_length (int): Context length for training
+        device (str): Device to run the model on
+        seed (int): Random seed for reproducibility
     """
     # Set random seed for reproducibility
     torch.manual_seed(seed)
-    
+    logger.info(f"Training on {device}")
+
     # Training loop
-    for epoch in range(epochs):
-        for i in range(0, len(train_data), batch_size):
-            # get a batch of data
-            x_batch, y_batch = get_batch(train_data, context_length, batch_size, device)
+    for step in range(iterations):
 
-            # zero the gradients
-            optimizer.zero_grad()
+        # evaluate model
+        if step == 0 or step % eval_interval == 0:
+            losses = estimate_loss(model, train_data, val_data, batch_size, eval_interval, context_length, device)
+            logger.info(
+                f"[Iterations: {step:4d}] Train loss: {losses['train_loss']:8.4f} | Validation loss: {losses['val_loss']:8.4f}"
+            )
+        
+        # get a batch of data
+        x_batch, y_batch = get_batch(train_data, context_length, batch_size, device)
 
-            # forward pass and compute loss
-            _, loss = model(x_batch, y_batch)
+        # zero the gradients
+        optimizer.zero_grad()
 
-            # backward pass and optimizer step
-            loss.backward()
-            optimizer.step()
+        # forward pass and compute loss
+        _, loss = model(x_batch, y_batch)
 
-            # log loss at intervals
-            if i % eval_interval == 0:
-                logger.info(
-                    f"[Epoch: {epoch:4d}, Iteration: {i:6d}] Loss: {loss.item():8.4f}"
-                )
-
-        # estimate loss on training and validation sets at the end of each epoch
-        losses = estimate_loss(model, train_data, val_data, batch_size, context_length, device)
-        logger.info(
-            f"[Epoch: {epoch:4d}] Train loss: {losses['train_loss']:8.4f} | Validation loss: {losses['val_loss']:8.4f}"
-        )
+        # backward pass and optimizer step
+        loss.backward()
+        optimizer.step()
 
 def main():
     """Main training script"""
@@ -160,7 +158,7 @@ def main():
         logger.info("Optimizer initialized")
         
         # 5. Training loop
-        train_model(model, optimizer, train_data, val_data, config.BATCH_SIZE, config.EPOCHS, config.EVAL_INTERVAL, config.CONTEXT_LENGTH, config.DEVICE, config.SEED)
+        train_model(model, optimizer, train_data, val_data, config.BATCH_SIZE, config.ITERATIONS, config.EVAL_INTERVAL, config.CONTEXT_LENGTH, config.DEVICE, config.SEED)
         logger.info("Training completed")
         
         # 6. Save the model
