@@ -5,7 +5,6 @@ import json
 import evaluate
 
 from model import Model
-from utils import get_batch
 from generation import TextGenerator
 
 with open('config.json', 'r') as f:
@@ -71,8 +70,12 @@ def main():
     model.eval()
 
     # load the dataset
-    test_datasets = load_data(ModelConfig.DATASET_PATH)
-    print(f"Loaded {test_datasets} test datasets")
+    datasets = load_data(ModelConfig.DATASET_PATH)
+    test_datasets = []
+    for i in range(0, 10):
+        test_datasets.append(datasets['train'][i]['text'])
+
+    # print(f"Loaded {test_datasets} test datasets")
 
     # load text generator
     generator = TextGenerator(model_path=ModelConfig.MODEL_PATH)
@@ -80,11 +83,17 @@ def main():
     # prepare the texts=pairs(generated_texts, reference_texts)
     generated_texts = []
     reference_texts = []
-    for dataset in test_datasets:
-        for prompt in dataset:
-            reference_texts.append(prompt)
-            generated_text = generator.generate_text(prompt)
-            generated_texts.append(generated_text)
+    for i in range(0, 10):
+        prompt = test_datasets[i]
+        generated_text = generator.generate_text(prompt, max_tokens=ModelConfig.CONTEXT_LENGTH, temperature=0.7, top_k=50)
+        generated_texts.append(generated_text)
+        reference_texts.append(test_datasets[i])
+
+    # print all pairs
+    for i in range(len(generated_texts)):
+        print(f"Pair {i+1}")
+        print(f"Generated text: {generated_texts[i]}")
+        print(f"Reference text: {reference_texts[i]}")
 
     # evaluate the model
     scores = evaluate_texts(generated_texts, reference_texts)
