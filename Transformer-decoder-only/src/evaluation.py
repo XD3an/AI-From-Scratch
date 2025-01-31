@@ -72,7 +72,8 @@ def main():
     # load the dataset
     datasets = load_data(ModelConfig.DATASET_PATH)
     test_datasets = []
-    for i in range(0, 10):
+    test_batch = 10
+    for i in range(0, test_batch):
         test_datasets.append(datasets['train'][i]['text'])
 
     # print(f"Loaded {test_datasets} test datasets")
@@ -83,17 +84,15 @@ def main():
     # prepare the texts=pairs(generated_texts, reference_texts)
     generated_texts = []
     reference_texts = []
-    for i in range(0, 10):
-        prompt = test_datasets[i]
-        generated_text = generator.generate_text(prompt, max_tokens=ModelConfig.CONTEXT_LENGTH, temperature=0.7, top_k=50)
-        generated_texts.append(generated_text)
-        reference_texts.append(test_datasets[i])
-
-    # print all pairs
-    for i in range(len(generated_texts)):
+    for i in range(0, test_batch):
+        prompt = test_datasets[i][:ModelConfig.CONTEXT_LENGTH]
+        generated_text = generator.generate_text(prompt, max_tokens=len(test_datasets[i]), temperature=0.7, top_k=50)
+        generated_texts.append(generated_text[:min(len(generated_text), len(test_datasets[i]))])
+        reference_texts.append(test_datasets[i][:min(len(generated_text), len(test_datasets[i]))])
         print(f"Pair {i+1}")
-        print(f"Generated text: {generated_texts[i]}")
-        print(f"Reference text: {reference_texts[i]}")
+        print(f"Prompt: {prompt}, max_tokens: {len(test_datasets[i])}, temperature: 0.7, top_k: 50")
+        print(f"Generated text (len={len(generated_texts[i])}): {generated_texts[i]}")
+        print(f"Reference text (len={len(reference_texts[i])}): {reference_texts[i]}")
 
     # evaluate the model
     scores = evaluate_texts(generated_texts, reference_texts)
